@@ -65,11 +65,6 @@ class Category(CommonInfo):
 
 
 class Post(CommonInfo):
-    STATUS_CHOICES = (
-        ("draft", "Draft"),
-        ("published", "Published"),
-        ("scheduled", "Scheduled"),
-    )
     title = models.CharField(
         max_length=const.MAX_LENGTH, verbose_name="Заголовок"
     )
@@ -102,9 +97,6 @@ class Post(CommonInfo):
         verbose_name="Категория",
         related_name="posts",
     )
-    status = models.CharField(
-        max_length=10, choices=STATUS_CHOICES, default="draft"
-    )
     updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлено")
     image = models.ImageField(upload_to="post_images/", blank=True, null=True)
 
@@ -123,7 +115,8 @@ class Post(CommonInfo):
 
 class Comment(CommonInfo):
     post = models.ForeignKey(
-        Post, on_delete=models.CASCADE, related_name='comments')
+        Post, on_delete=models.CASCADE, related_name="comments"
+    )
     author = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

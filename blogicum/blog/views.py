@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import (
@@ -9,12 +9,12 @@ from django.views.generic import (
     ListView,
     UpdateView,
 )
-from django.http import Http404
-from django.db.models import Count, Q, Sum
+
 from .forms import CommentForm, EditProfileForm, PostForm
 from .mixins import PostListMixin, CommentMixin, AuthorRequiredMixin
 from .models import Comment, Category, Post, User
-from .utils import get_post_queryset
+from .query_utils import get_post_queryset
+from django.conf import settings
 
 User = get_user_model()
 
@@ -22,37 +22,20 @@ User = get_user_model()
 class PostListView(PostListMixin, ListView):
     template_name = "blog/index.html"
 
-    def get_queryset(self):
-        return get_post_queryset(filter_published=True, annotate_comments=True)
-
 
 class PostDetailView(DetailView):
     model = Post
     template_name = "blog/detail.html"
 
     def get_object(self, queryset=None):
-        post = get_object_or_404(
+        filter_published = self.request.user != self.object.author
+        return get_object_or_404(
             get_post_queryset(
-                manager=Post.objects,
-                filter_published=False,
+                filter_published=filter_published,
                 annotate_comments=False,
             ),
             pk=self.kwargs["post_id"],
         )
-
-        if post.author != self.request.user:
-            post = get_object_or_404(
-                get_post_queryset(
-                    manager=Post.objects,
-                    filter_published=True,
-                    annotate_comments=False,
-                ),
-                pk=self.kwargs["post_id"],
-            )
-            if not post:
-                raise Http404("Post not found")
-
-        return post
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -65,7 +48,7 @@ class PostDetailView(DetailView):
 
 class CategoryPostListView(ListView):
     template_name = "blog/category.html"
-    paginate_by = 10
+    paginate_by = settings.PAGINATE_BY
 
     def get_queryset(self):
         category = get_object_or_404(
@@ -98,12 +81,6 @@ class CreatePostView(LoginRequiredMixin, CreateView):
         return redirect("blog:profile", username=self.request.user.username)
 
 
-class AuthorRequiredMixin(UserPassesTestMixin):
-    def test_func(self):
-        obj = self.get_object()
-        return obj.author == self.request.user
-
-
 class EditPostView(LoginRequiredMixin, AuthorRequiredMixin, UpdateView):
     model = Post
     form_class = PostForm
@@ -127,7 +104,7 @@ class DeletePostView(LoginRequiredMixin, AuthorRequiredMixin, DeleteView):
 
 class ProfileView(ListView):
     template_name = "blog/profile.html"
-    paginate_by = 10
+    paginate_by = settings.PAGINATE_BY
 
     def get_user(self):
         return get_object_or_404(User, username=self.kwargs["username"])
@@ -136,19 +113,13 @@ class ProfileView(ListView):
         user = self.get_user()
         return get_post_queryset(
             manager=user.posts,
-            filter_published=not self.request.user.is_authenticated
-            or self.request.user != user,
+            filter_published=self.request.user != user,
         )
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.get_user()
         context["profile"] = user
-        context["comment_count"] = user.posts.annotate(
-            comment_count=Count(
-                "comments", filter=Q(comments__is_published=True)
-            )
-        ).aggregate(Sum("comment_count"))["comment_count__sum"]
         return context
 
 

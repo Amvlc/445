@@ -1,18 +1,18 @@
 from django.contrib.auth.mixins import UserPassesTestMixin
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.conf import settings
+
 from .models import Comment, Post
-from .utils import get_post_queryset
-from .const import PAGINATE_BY
+from .query_utils import get_post_queryset
 
 
 class PostListMixin:
     model = Post
-    paginate_by = PAGINATE_BY
+    paginate_by = settings.PAGINATE_BY
 
     def get_queryset(self):
         return get_post_queryset(
-            self.model.objects.all(),
             filter_published=True,
             annotate_comments=True,
         )
